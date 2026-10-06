@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <phpunit bootstrap="tests/bootstrap.php" colors="true" failOnWarning="true" failOnRisky="true">
+  <coverage processUncoveredFiles="true">
+    <include>
+      <directory suffix=".php">includes</directory>
+    </include>
+  </coverage>
   <testsuites>
     <testsuite name="TutorLMS MCP Unit Tests">
       <directory suffix="Test.php">tests/unit</directory>
