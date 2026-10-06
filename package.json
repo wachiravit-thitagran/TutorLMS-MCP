@@ -1,0 +1,13 @@
+{
+  "name": "tutorlms-mcp",
+  "private": true,
+  "scripts": {
+    "wp-env:start": "wp-env start",
+    "wp-env:stop": "wp-env stop",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.51.0",
+    "@wordpress/env": "^10.18.0"
+  }
+}
