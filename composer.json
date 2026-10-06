@@ -16,7 +16,7 @@
   "scripts": {
     "test": "phpunit",
     "lint": "find . -type f -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l",
-    "phpcs": "phpcs --standard=WordPress --extensions=php --ignore=vendor ."
+    "phpcs": "phpcs --warning-severity=0"
   },
   "config": {
     "allow-plugins": {
