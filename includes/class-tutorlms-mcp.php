@@ -56,7 +56,7 @@ final class Plugin {
 			'tutorlms',
 			array(
 				'label'       => 'Tutor LMS',
-				'description' => 'Tutor LMS management and reporting abilities.',
+				'description' => 'Course, curriculum, learner progress, and other Tutor LMS management and reporting capabilities.',
 			)
 		);
 	}
@@ -93,7 +93,7 @@ final class Plugin {
 			'tutorlms/site-info',
 			array(
 				'label'               => 'Tutor LMS Site Info',
-				'description'         => 'Returns Tutor LMS and environment information for capability discovery.',
+				'description'         => 'Returns Tutor LMS and WordPress environment information relevant to the active learning-management installation.',
 				'category'            => 'tutorlms',
 				'input_schema'        => array(
 					'type'       => 'object',
@@ -125,7 +125,7 @@ final class Plugin {
 			'tutorlms/list-courses',
 			array(
 				'label'       => 'List Tutor LMS Courses',
-				'description' => 'Lists Tutor LMS courses with pagination and optional search.',
+				'description' => 'Lists Tutor LMS courses with pagination, optional text search, and status filtering.',
 				'category'    => 'tutorlms',
 				'input_schema' => array(
 					'type'       => 'object',
@@ -204,7 +204,7 @@ final class Plugin {
 			'tutorlms/get-course',
 			array(
 				'label'       => 'Get Tutor LMS Course',
-				'description' => 'Returns a Tutor LMS course by ID.',
+				'description' => 'Retrieves a Tutor LMS course and its primary content, publishing status, author, URL, and thumbnail information.',
 				'category'    => 'tutorlms',
 				'input_schema' => array(
 					'type'       => 'object',
@@ -254,7 +254,7 @@ final class Plugin {
 			'tutorlms/get-course-structure',
 			array(
 				'label'       => 'Get Tutor LMS Course Structure',
-				'description' => 'Returns topics and child content for a Tutor LMS course.',
+				'description' => 'Retrieves the ordered curriculum structure of a Tutor LMS course, including topics and their lessons, quizzes, and assignments.',
 				'category'    => 'tutorlms',
 				'input_schema' => array(
 					'type'       => 'object',
@@ -339,7 +339,7 @@ final class Plugin {
 			'tutorlms/get-student-progress',
 			array(
 				'label'       => 'Get Tutor LMS Student Progress',
-				'description' => 'Returns course progress for a student when Tutor LMS progress helpers are available.',
+				'description' => 'Retrieves a learner's completion progress for a Tutor LMS course when progress data is available.',
 				'category'    => 'tutorlms',
 				'input_schema' => array(
 					'type'       => 'object',
