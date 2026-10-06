@@ -1,0 +1,9 @@
+vendor/
+node_modules/
+.wp-env/
+playwright-report/
+test-results/
+coverage.xml
+composer.lock
+npm-debug.log*
+.DS_Store
