@@ -1,0 +1,68 @@
+name: DAST
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '47 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  zap-baseline:
+    name: OWASP ZAP baseline
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm install
+
+      - name: Start WordPress test environment
+        run: npx wp-env start
+
+      - name: Install Tutor LMS and MCP Adapter
+        run: |
+          npx wp-env run cli wp plugin install tutor --activate
+          npx wp-env run cli wp plugin install https://github.com/WordPress/mcp-adapter/releases/latest/download/mcp-adapter.zip --activate
+          npx wp-env run cli wp plugin activate --all
+
+      - name: Wait for WordPress
+        run: |
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8888/wp-json/ >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Resolve Docker host address
+        run: |
+          HOST_IP=$(ip -f inet -o addr show docker0 | awk '{print $4}' | cut -d '/' -f 1)
+          echo "ZAP_TARGET=http://${HOST_IP}:8888" >> "$GITHUB_ENV"
+
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target: ${{ env.ZAP_TARGET }}
+          fail_action: true
+          allow_issue_writing: true
+          artifact_name: zap-baseline-report
+
+      - name: Stop WordPress environment
+        if: always()
+        run: npx wp-env stop
