@@ -95,7 +95,10 @@ final class Plugin {
 				'label'               => 'Tutor LMS Site Info',
 				'description'         => 'Returns Tutor LMS and environment information for capability discovery.',
 				'category'            => 'tutorlms',
-				'input_schema'        => array( 'type' => 'object', 'properties' => array() ),
+				'input_schema'        => array(
+					'type'       => 'object',
+					'properties' => array(),
+				),
 				'execute_callback'    => array( $this, 'site_info' ),
 				'permission_callback' => array( $this, 'can_read_ability' ),
 				'meta'                => $this->common_meta(),
@@ -232,6 +235,8 @@ final class Plugin {
 			return new \WP_Error( 'tutorlms_mcp_forbidden', 'You do not have permission to read this course.' );
 		}
 
+		$thumbnail = get_the_post_thumbnail_url( $post, 'full' );
+
 		return array(
 			'id'        => $post->ID,
 			'title'     => get_the_title( $post ),
@@ -240,7 +245,7 @@ final class Plugin {
 			'status'    => $post->post_status,
 			'author_id' => (int) $post->post_author,
 			'url'       => get_permalink( $post ),
-			'thumbnail' => get_the_post_thumbnail_url( $post, 'full' ) ?: null,
+			'thumbnail' => $thumbnail ? $thumbnail : null,
 		);
 	}
 
