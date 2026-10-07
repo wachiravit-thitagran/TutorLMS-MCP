@@ -64,8 +64,7 @@ jobs:
             sleep 2
           done
 
-          PASS_FILE="$GITHUB_WORKSPACE/tests/.mcp-app-pass"
-          rm -f "$PASS_FILE"
+          PASS_PATH="mcp-e2e-pass.txt"
 
           npx wp-env run cli wp eval '
             $user = get_user_by( "login", "admin" );
@@ -77,12 +76,11 @@ jobs:
               fwrite( STDERR, $created->get_error_message() );
               exit( 1 );
             }
-            file_put_contents( TUTORLMS_MCP_DIR . "tests/.mcp-app-pass", $created[0] );
+            file_put_contents( ABSPATH . "mcp-e2e-pass.txt", $created[0] );
           '
 
-          test -s "$PASS_FILE"
-          APP_PASS="$(cat "$PASS_FILE")"
-          rm -f "$PASS_FILE"
+          APP_PASS="$(curl --fail --silent --show-error "${BASE_URL}/${PASS_PATH}")"
+          npx wp-env run cli wp eval 'if ( file_exists( ABSPATH . "mcp-e2e-pass.txt" ) ) { unlink( ABSPATH . "mcp-e2e-pass.txt" ); }'
           test -n "$APP_PASS"
 
           workdir="$(mktemp -d)"
