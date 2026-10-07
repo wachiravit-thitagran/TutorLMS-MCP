@@ -134,7 +134,14 @@ fi
 
 # 3. Unsupported protocol revision must return an error, not a successful session.
 bad_protocol="$(curl -4 --silent --show-error   -X POST "$ENDPOINT"   --user "${ADMIN_LOGIN}:${ADMIN_PASS}"   -H 'Content-Type: application/json'   -d '{"jsonrpc":"2.0","id":90,"method":"initialize","params":{"protocolVersion":"1900-01-01","capabilities":{},"clientInfo":{"name":"bad-protocol","version":"1"}}}')"
-expect_error_response "$bad_protocol" "Unsupported MCP protocol"
+
+# MCP initialize may reject an unsupported revision or negotiate to one the
+# server supports. It must never claim that the bogus requested revision was
+# successfully negotiated.
+if ! printf '%s' "$bad_protocol" | grep -q '"error"'; then
+  negotiated="$(printf '%s' "$bad_protocol" | jq -er '.result.protocolVersion')"
+  [ "$negotiated" != "1900-01-01" ] || fail "Server accepted an unsupported MCP protocol revision."
+fi
 
 ADMIN_SESSION="$(init_session "$ADMIN_LOGIN" "$ADMIN_PASS" admin)"
 STUDENT_SESSION="$(init_session "$STUDENT_A_LOGIN" "$STUDENT_A_PASS" student-a)"
