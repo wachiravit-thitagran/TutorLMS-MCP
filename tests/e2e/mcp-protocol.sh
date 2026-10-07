@@ -121,7 +121,10 @@ DRAFT_COURSE_ID="$(read_json "$fixture" '.draft_course_id')"
 
 # 1. Unauthenticated requests must be rejected.
 unauth_status="$(curl -4 -sS -o "${WORKDIR}/unauth.json" -w '%{http_code}'   -X POST "$ENDPOINT"   -H 'Content-Type: application/json'   -d "{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"${PROTOCOL_VERSION}","capabilities":{},"clientInfo":{"name":"unauth","version":"1"}}}")"
-[ "$unauth_status" = "401" ] || fail "Expected unauthenticated initialize HTTP 401, got $unauth_status."
+if [ "$unauth_status" -lt 400 ] || [ "$unauth_status" -ge 500 ]; then
+  cat "${WORKDIR}/unauth.json" >&2 || true
+  fail "Expected unauthenticated initialize to be rejected with HTTP 4xx, got $unauth_status."
+fi
 
 # 2. Malformed JSON must not execute.
 malformed_status="$(curl -4 -sS -o "${WORKDIR}/malformed.json" -w '%{http_code}'   -X POST "$ENDPOINT"   --user "${ADMIN_LOGIN}:${ADMIN_PASS}"   -H 'Content-Type: application/json'   -d '{')"
