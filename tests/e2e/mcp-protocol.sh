@@ -105,7 +105,7 @@ expect_error_response() {
 
 wait_for_wordpress
 
-bash tests/e2e/wp-cli.sh eval-file /mcp-tests/setup-fixture.php >/dev/null
+bash tests/e2e/wp-cli.sh eval-file /workspace/tests/e2e/setup-fixture.php >/dev/null
 
 fixture="$(curl -4 --fail --silent --show-error "${BASE_URL}/wp-content/${FIXTURE_PATH}")"
 [ -n "$fixture" ] || fail "Fixture JSON was empty."
