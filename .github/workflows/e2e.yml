@@ -50,11 +50,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          BASE_URL="http://127.0.0.1:8888"
+          BASE_URL="http://localhost:8888"
           ENDPOINT="${BASE_URL}/?rest_route=/mcp/mcp-adapter-default-server"
 
           for i in $(seq 1 30); do
-            if curl --fail --silent "${BASE_URL}/?rest_route=/" >/dev/null; then
+            if curl -4 --fail --silent "${BASE_URL}/?rest_route=/" >/dev/null; then
               break
             fi
             if [ "$i" -eq 30 ]; then
@@ -79,7 +79,7 @@ jobs:
             file_put_contents( ABSPATH . "mcp-e2e-pass.txt", $created[0] );
           '
 
-          APP_PASS="$(curl --fail --silent --show-error "${BASE_URL}/${PASS_PATH}")"
+          APP_PASS="$(curl -4 --fail --silent --show-error "${BASE_URL}/${PASS_PATH}")"
           npx wp-env run cli wp eval 'if ( file_exists( ABSPATH . "mcp-e2e-pass.txt" ) ) { unlink( ABSPATH . "mcp-e2e-pass.txt" ); }'
           test -n "$APP_PASS"
 
@@ -88,7 +88,7 @@ jobs:
           body="${workdir}/body.json"
 
           # Unauthenticated MCP requests must not be accepted.
-          unauth_status="$(curl -sS -o "${workdir}/unauth.json" -w '%{http_code}' \
+          unauth_status="$(curl -4 -sS -o "${workdir}/unauth.json" -w '%{http_code}' \
             -X POST "$ENDPOINT" \
             -H 'Content-Type: application/json' \
             -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"unauth-test","version":"1.0.0"}}}')"
@@ -114,14 +114,14 @@ jobs:
           test -n "$SESSION_ID"
 
           # A non-initialize request without the session header must fail.
-          missing_session_status="$(curl -sS -o "${workdir}/missing-session.json" -w '%{http_code}' \
+          missing_session_status="$(curl -4 -sS -o "${workdir}/missing-session.json" -w '%{http_code}' \
             -X POST "$ENDPOINT" \
             --user "admin:${APP_PASS}" \
             -H 'Content-Type: application/json' \
             -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')"
           test "$missing_session_status" = "400"
 
-          curl --fail --silent --show-error \
+          curl -4 --fail --silent --show-error \
             -X POST "$ENDPOINT" \
             --user "admin:${APP_PASS}" \
             -H 'Content-Type: application/json' \
@@ -130,7 +130,7 @@ jobs:
             -d '{"jsonrpc":"2.0","method":"notifications/initialized"}' >/dev/null
 
           # The default MCP server must expose the adapter meta-tools.
-          tools_json="$(curl --fail --silent --show-error \
+          tools_json="$(curl -4 --fail --silent --show-error \
             -X POST "$ENDPOINT" \
             --user "admin:${APP_PASS}" \
             -H 'Content-Type: application/json' \
@@ -143,7 +143,7 @@ jobs:
           printf '%s' "$tools_json" | grep -q 'mcp-adapter-execute-ability'
 
           # TutorLMS MCP abilities must be discoverable through the real adapter.
-          discover_json="$(curl --fail --silent --show-error \
+          discover_json="$(curl -4 --fail --silent --show-error \
             -X POST "$ENDPOINT" \
             --user "admin:${APP_PASS}" \
             -H 'Content-Type: application/json' \
@@ -161,7 +161,7 @@ jobs:
           done
 
           # Execute a TutorLMS ability through MCP, not by calling PHP directly.
-          execute_json="$(curl --fail --silent --show-error \
+          execute_json="$(curl -4 --fail --silent --show-error \
             -X POST "$ENDPOINT" \
             --user "admin:${APP_PASS}" \
             -H 'Content-Type: application/json' \
@@ -172,7 +172,7 @@ jobs:
           printf '%s' "$execute_json" | grep -q 'wordpress_version'
           printf '%s' "$execute_json" | grep -q 'tutorlms'
 
-          curl --fail --silent --show-error \
+          curl -4 --fail --silent --show-error \
             -X DELETE "$ENDPOINT" \
             --user "admin:${APP_PASS}" \
             -H "Mcp-Session-Id: $SESSION_ID" \
