@@ -81,7 +81,7 @@ mcp_request() {
   local session="$3"
   local payload="$4"
 
-  curl -4 --fail --silent --show-error     -X POST "$ENDPOINT"     --user "${login}:${pass}"     -H 'Content-Type: application/json'     -H "Mcp-Session-Id: $session"     -H "MCP-Protocol-Version: $PROTOCOL_VERSION"     -d "$payload"
+  curl -4 --silent --show-error     -X POST "$ENDPOINT"     --user "${login}:${pass}"     -H 'Content-Type: application/json'     -H "Mcp-Session-Id: $session"     -H "MCP-Protocol-Version: $PROTOCOL_VERSION"     -d "$payload"
 }
 
 call_ability() {
