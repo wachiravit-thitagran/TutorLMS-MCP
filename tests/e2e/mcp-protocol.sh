@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+trap 'rc=$?; echo "::error::mcp-protocol.sh failed at line $LINENO: $BASH_COMMAND (exit $rc)" >&2' ERR
 
 BASE_URL="${WP_BASE_URL:-http://localhost:8888}"
 ENDPOINT="${BASE_URL}/?rest_route=/mcp/mcp-adapter-default-server"
