@@ -176,18 +176,22 @@ jobs:
             -H 'MCP-Protocol-Version: 2025-11-25' \
             -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"mcp-adapter-discover-abilities","arguments":{}}}')"
 
+          # JSON may escape forward slashes as \/; normalize before matching names.
+          discover_normalized="$(printf '%s' "$discover_json" | sed 's#\\/#/#g')"
+
           for ability in \
             'tutorlms/site-info' \
             'tutorlms/list-courses' \
             'tutorlms/get-course' \
             'tutorlms/get-course-structure' \
             'tutorlms/get-student-progress'; do
-            if ! printf '%s' "$discover_json" | grep -q "$ability"; then
+            if ! printf '%s' "$discover_normalized" | grep -q "$ability"; then
               echo "::error::MCP discovery did not expose expected ability: $ability"
               printf '%s\n' "$discover_json"
               exit 1
             fi
           done
+          echo "TutorLMS abilities discovered through MCP."
 
           # Execute a TutorLMS ability through MCP, not by calling PHP directly.
           execute_json="$(curl -4 --fail --silent --show-error \
