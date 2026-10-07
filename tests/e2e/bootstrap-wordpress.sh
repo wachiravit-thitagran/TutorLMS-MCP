@@ -4,7 +4,7 @@ set -euo pipefail
 WORDPRESS_CHANNEL="${WORDPRESS_CHANNEL:-stable}"
 TUTOR_VERSION="${TUTOR_VERSION:-4.1.1}"
 MCP_ADAPTER_URL="${MCP_ADAPTER_URL:-https://github.com/WordPress/mcp-adapter/releases/download/v0.7.0/mcp-adapter.zip}"
-ACTIVATE_PLUGIN_SLUG="${ACTIVATE_PLUGIN_SLUG:-TutorLMS-MCP}"
+ACTIVATE_PLUGIN_SLUG="${ACTIVATE_PLUGIN_SLUG-TutorLMS-MCP}"
 BASE_URL="${WP_BASE_URL:-http://localhost:8888}"
 
 docker compose -f tests/e2e/docker-compose.yml up -d db wordpress
