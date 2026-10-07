@@ -44,7 +44,7 @@ services:
     volumes:
       - wordpress_data:/var/www/html
       - ${PLUGIN_SOURCE:-../..}:/var/www/html/wp-content/plugins/TutorLMS-MCP
-      - ../../tests/e2e:/mcp-tests:ro
+      - ${REPO_SOURCE:-../..}:/workspace:ro
 
 volumes:
   db_data:
