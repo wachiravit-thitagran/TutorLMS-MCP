@@ -110,13 +110,22 @@ if ( is_wp_error( $lesson_id ) ) {
 	throw new RuntimeException( $lesson_id->get_error_message() );
 }
 
-if ( ! function_exists( 'tutor_utils' ) || ! is_object( tutor_utils() ) || ! method_exists( tutor_utils(), 'do_enroll' ) ) {
-	throw new RuntimeException( 'Tutor LMS enrollment API is unavailable.' );
-}
-
-$enrolled = tutor_utils()->do_enroll( (int) $course_id, 0, $student_a_id );
-if ( false === $enrolled ) {
-	throw new RuntimeException( 'Could not enroll MCP E2E student.' );
+// Tutor LMS persists enrollments as tutor_enrolled posts. Create the same
+// storage shape used by EnrollmentModel::do_enroll() so the fixture works in
+// WP-CLI as well as normal HTTP requests.
+$enrollment_id = wp_insert_post(
+	array(
+		'post_type'     => 'tutor_enrolled',
+		'post_title'    => 'MCP E2E Course Enrollment',
+		'post_status'   => 'completed',
+		'post_author'   => $student_a_id,
+		'post_parent'   => (int) $course_id,
+		'post_date_gmt' => current_time( 'mysql', true ),
+	),
+	true
+);
+if ( is_wp_error( $enrollment_id ) ) {
+	throw new RuntimeException( $enrollment_id->get_error_message() );
 }
 
 $fixture = array(
@@ -139,6 +148,7 @@ $fixture = array(
 	'draft_course_id' => (int) $draft_course_id,
 	'topic_id'        => (int) $topic_id,
 	'lesson_id'       => (int) $lesson_id,
+	'enrollment_id'   => (int) $enrollment_id,
 );
 
 $file = WP_CONTENT_DIR . '/mcp-e2e-fixture.json';
