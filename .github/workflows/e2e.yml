@@ -43,6 +43,113 @@ jobs:
         run: |
           npx wp-env run cli wp plugin is-active tutor
           npx wp-env run cli wp plugin is-active mcp-adapter
+          npx wp-env run cli wp plugin is-active tutorlms-mcp
+
+      - name: MCP protocol smoke - initialize, discover, execute
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BASE_URL="http://127.0.0.1:8888"
+          ENDPOINT="${BASE_URL}/wp-json/mcp/mcp-adapter-default-server"
+
+          for i in $(seq 1 30); do
+            if curl --fail --silent "${BASE_URL}/wp-json/" >/dev/null; then
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "::error::WordPress did not become ready."
+              exit 1
+            fi
+            sleep 2
+          done
+
+          APP_PASS="$(npx wp-env run cli wp user application-password create admin "TutorLMS MCP E2E" --porcelain | tail -n1 | tr -d '\r')"
+          test -n "$APP_PASS"
+
+          workdir="$(mktemp -d)"
+          headers="${workdir}/headers.txt"
+          body="${workdir}/body.json"
+
+          # Unauthenticated MCP requests must not be accepted.
+          unauth_status="$(curl -sS -o "${workdir}/unauth.json" -w '%{http_code}' \
+            -X POST "$ENDPOINT" \
+            -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"unauth-test","version":"1.0.0"}}}')"
+          test "$unauth_status" = "401"
+
+          # Initialize an authenticated MCP session.
+          curl --fail --silent --show-error -D "$headers" -o "$body" \
+            -X POST "$ENDPOINT" \
+            --user "admin:${APP_PASS}" \
+            -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"tutorlms-mcp-e2e","version":"1.0.0"}}}'
+
+          grep -q '"jsonrpc"' "$body"
+          grep -q '"result"' "$body"
+
+          SESSION_ID="$(awk 'BEGIN{IGNORECASE=1} /^Mcp-Session-Id:/ {gsub("\\r","",$2); print $2}' "$headers" | tail -n1)"
+          test -n "$SESSION_ID"
+
+          # A non-initialize request without the session header must fail.
+          missing_session_status="$(curl -sS -o "${workdir}/missing-session.json" -w '%{http_code}' \
+            -X POST "$ENDPOINT" \
+            --user "admin:${APP_PASS}" \
+            -H 'Content-Type: application/json' \
+            -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')"
+          test "$missing_session_status" = "400"
+
+          curl --fail --silent --show-error \
+            -X POST "$ENDPOINT" \
+            --user "admin:${APP_PASS}" \
+            -H 'Content-Type: application/json' \
+            -H "Mcp-Session-Id: $SESSION_ID" \
+            -d '{"jsonrpc":"2.0","method":"notifications/initialized"}' >/dev/null
+
+          # The default MCP server must expose the adapter meta-tools.
+          tools_json="$(curl --fail --silent --show-error \
+            -X POST "$ENDPOINT" \
+            --user "admin:${APP_PASS}" \
+            -H 'Content-Type: application/json' \
+            -H "Mcp-Session-Id: $SESSION_ID" \
+            -d '{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}')"
+
+          printf '%s' "$tools_json" | grep -q 'mcp-adapter-discover-abilities'
+          printf '%s' "$tools_json" | grep -q 'mcp-adapter-get-ability-info'
+          printf '%s' "$tools_json" | grep -q 'mcp-adapter-execute-ability'
+
+          # TutorLMS MCP abilities must be discoverable through the real adapter.
+          discover_json="$(curl --fail --silent --show-error \
+            -X POST "$ENDPOINT" \
+            --user "admin:${APP_PASS}" \
+            -H 'Content-Type: application/json' \
+            -H "Mcp-Session-Id: $SESSION_ID" \
+            -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"mcp-adapter-discover-abilities","arguments":{}}}')"
+
+          for ability in \
+            'tutorlms/site-info' \
+            'tutorlms/list-courses' \
+            'tutorlms/get-course' \
+            'tutorlms/get-course-structure' \
+            'tutorlms/get-student-progress'; do
+            printf '%s' "$discover_json" | grep -q "$ability"
+          done
+
+          # Execute a TutorLMS ability through MCP, not by calling PHP directly.
+          execute_json="$(curl --fail --silent --show-error \
+            -X POST "$ENDPOINT" \
+            --user "admin:${APP_PASS}" \
+            -H 'Content-Type: application/json' \
+            -H "Mcp-Session-Id: $SESSION_ID" \
+            -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"mcp-adapter-execute-ability","arguments":{"ability_name":"tutorlms/site-info","parameters":{}}}}')"
+
+          printf '%s' "$execute_json" | grep -q 'wordpress_version'
+          printf '%s' "$execute_json" | grep -q 'tutorlms'
+
+          curl --fail --silent --show-error \
+            -X DELETE "$ENDPOINT" \
+            --user "admin:${APP_PASS}" \
+            -H "Mcp-Session-Id: $SESSION_ID" >/dev/null
 
       - name: Run Playwright E2E
         run: npm run e2e
