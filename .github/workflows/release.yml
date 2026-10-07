@@ -40,7 +40,10 @@ jobs:
             exit 0
           fi
 
-          changed="$(git diff --name-only "$latest_tag"..HEAD --             .             ':(exclude).github/**'             ':(exclude)tests/**'             ':(exclude)docs/**'             ':(exclude)**/*.md')"
+          # The installable ZIP contains only the plugin bootstrap and includes/.
+          # Test tooling, CI, docs, Playwright, Composer and Node metadata must
+          # never create a new plugin version by themselves.
+          changed="$(git diff --name-only "$latest_tag"..HEAD -- tutorlms-mcp.php includes/)"
 
           if [ -n "$changed" ]; then
             echo "Releasable changes since $latest_tag:"
