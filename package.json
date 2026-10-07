@@ -10,5 +10,10 @@
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "@wordpress/env": "^11.16.0"
+  },
+  "overrides": {
+    "simple-git": "4.0.2",
+    "@simple-git/argv-parser": "2.0.1",
+    "qs": "6.16.0"
   }
 }
