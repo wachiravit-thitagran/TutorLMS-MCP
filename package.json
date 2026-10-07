@@ -12,6 +12,7 @@
     "@wordpress/env": "^11.16.0"
   },
   "overrides": {
+    "simple-git": "3.36.0",
     "qs": "6.16.0"
   }
 }
