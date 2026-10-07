@@ -53,8 +53,11 @@ init_session() {
   local headers="${WORKDIR}/${prefix}-headers.txt"
   local body="${WORKDIR}/${prefix}-init.json"
 
+  local payload
+  payload="$(jq -cn --arg protocol "$PROTOCOL_VERSION" '{jsonrpc:"2.0",id:1,method:"initialize",params:{protocolVersion:$protocol,capabilities:{},clientInfo:{name:"tutorlms-mcp-e2e",version:"1.0.0"}}}')"
+
   local status
-  status="$(curl -4 --silent --show-error -D "$headers" -o "$body" -w '%{http_code}'     -X POST "$ENDPOINT"     --user "${login}:${pass}"     -H 'Content-Type: application/json'     -d "{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"${PROTOCOL_VERSION}","capabilities":{},"clientInfo":{"name":"tutorlms-mcp-e2e","version":"1.0.0"}}}")"
+  status="$(curl -4 --silent --show-error -D "$headers" -o "$body" -w '%{http_code}'     -X POST "$ENDPOINT"     --user "${login}:${pass}"     -H 'Content-Type: application/json'     -d "$payload")"
 
   if [ "$status" != "200" ]; then
     cat "$body" >&2 || true
@@ -121,7 +124,8 @@ COURSE_ID="$(read_json "$fixture" '.course_id')"
 DRAFT_COURSE_ID="$(read_json "$fixture" '.draft_course_id')"
 
 # 1. Unauthenticated requests must be rejected.
-unauth_status="$(curl -4 -sS -o "${WORKDIR}/unauth.json" -w '%{http_code}'   -X POST "$ENDPOINT"   -H 'Content-Type: application/json'   -d "{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"${PROTOCOL_VERSION}","capabilities":{},"clientInfo":{"name":"unauth","version":"1"}}}")"
+unauth_payload="$(jq -cn --arg protocol "$PROTOCOL_VERSION" '{jsonrpc:"2.0",id:0,method:"initialize",params:{protocolVersion:$protocol,capabilities:{},clientInfo:{name:"unauth",version:"1"}}}')"
+unauth_status="$(curl -4 -sS -o "${WORKDIR}/unauth.json" -w '%{http_code}'   -X POST "$ENDPOINT"   -H 'Content-Type: application/json'   -d "$unauth_payload")"
 if [ "$unauth_status" -lt 400 ] || [ "$unauth_status" -ge 500 ]; then
   cat "${WORKDIR}/unauth.json" >&2 || true
   fail "Expected unauthenticated initialize to be rejected with HTTP 4xx, got $unauth_status."
