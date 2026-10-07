@@ -81,7 +81,11 @@ jobs:
 
           APP_PASS="$(curl -4 --fail --silent --show-error "${BASE_URL}/${PASS_PATH}")"
           npx wp-env run cli wp eval 'if ( file_exists( ABSPATH . "mcp-e2e-pass.txt" ) ) { unlink( ABSPATH . "mcp-e2e-pass.txt" ); }'
-          test -n "$APP_PASS"
+          if [ -z "$APP_PASS" ]; then
+            echo "::error::Application Password creation returned an empty value."
+            exit 1
+          fi
+          echo "Application Password captured (length: ${#APP_PASS})."
 
           workdir="$(mktemp -d)"
           headers="${workdir}/headers.txt"
@@ -92,7 +96,11 @@ jobs:
             -X POST "$ENDPOINT" \
             -H 'Content-Type: application/json' \
             -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"unauth-test","version":"1.0.0"}}}')"
-          test "$unauth_status" = "401"
+          if [ "$unauth_status" != "401" ]; then
+            echo "::error::Expected unauthenticated initialize to return HTTP 401, got $unauth_status"
+            cat "${workdir}/unauth.json"
+            exit 1
+          fi
 
           # Initialize an authenticated MCP session.
           init_status="$(curl --silent --show-error -D "$headers" -o "$body" -w '%{http_code}' \
@@ -111,7 +119,15 @@ jobs:
           grep -q '"result"' "$body"
 
           SESSION_ID="$(awk 'BEGIN{IGNORECASE=1} /^Mcp-Session-Id:/ {gsub("\\r","",$2); print $2}' "$headers" | tail -n1)"
-          test -n "$SESSION_ID"
+          if [ -z "$SESSION_ID" ]; then
+            echo "::error::MCP initialize response did not include Mcp-Session-Id."
+            echo "--- response headers ---"
+            sed -E 's/(Authorization:).*/\1 [redacted]/I' "$headers"
+            echo "--- response body ---"
+            cat "$body"
+            exit 1
+          fi
+          echo "MCP session initialized."
 
           # A non-initialize request without the session header must fail.
           missing_session_status="$(curl -4 -sS -o "${workdir}/missing-session.json" -w '%{http_code}' \
@@ -119,7 +135,11 @@ jobs:
             --user "admin:${APP_PASS}" \
             -H 'Content-Type: application/json' \
             -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')"
-          test "$missing_session_status" = "400"
+          if [ "$missing_session_status" != "400" ]; then
+            echo "::error::Expected tools/list without Mcp-Session-Id to return HTTP 400, got $missing_session_status"
+            cat "${workdir}/missing-session.json"
+            exit 1
+          fi
 
           curl -4 --fail --silent --show-error \
             -X POST "$ENDPOINT" \
@@ -138,9 +158,14 @@ jobs:
             -H 'MCP-Protocol-Version: 2025-11-25' \
             -d '{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}')"
 
-          printf '%s' "$tools_json" | grep -q 'mcp-adapter-discover-abilities'
-          printf '%s' "$tools_json" | grep -q 'mcp-adapter-get-ability-info'
-          printf '%s' "$tools_json" | grep -q 'mcp-adapter-execute-ability'
+          for tool in             'mcp-adapter-discover-abilities'             'mcp-adapter-get-ability-info'             'mcp-adapter-execute-ability'; do
+            if ! printf '%s' "$tools_json" | grep -q "$tool"; then
+              echo "::error::tools/list did not expose expected tool: $tool"
+              printf '%s\n' "$tools_json"
+              exit 1
+            fi
+          done
+          echo "MCP meta-tools discovered."
 
           # TutorLMS MCP abilities must be discoverable through the real adapter.
           discover_json="$(curl -4 --fail --silent --show-error \
@@ -157,7 +182,11 @@ jobs:
             'tutorlms/get-course' \
             'tutorlms/get-course-structure' \
             'tutorlms/get-student-progress'; do
-            printf '%s' "$discover_json" | grep -q "$ability"
+            if ! printf '%s' "$discover_json" | grep -q "$ability"; then
+              echo "::error::MCP discovery did not expose expected ability: $ability"
+              printf '%s\n' "$discover_json"
+              exit 1
+            fi
           done
 
           # Execute a TutorLMS ability through MCP, not by calling PHP directly.
@@ -169,8 +198,17 @@ jobs:
             -H 'MCP-Protocol-Version: 2025-11-25' \
             -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"mcp-adapter-execute-ability","arguments":{"ability_name":"tutorlms/site-info","parameters":{}}}}')"
 
-          printf '%s' "$execute_json" | grep -q 'wordpress_version'
-          printf '%s' "$execute_json" | grep -q 'tutorlms'
+          if ! printf '%s' "$execute_json" | grep -q 'wordpress_version'; then
+            echo "::error::Executing tutorlms/site-info did not return wordpress_version."
+            printf '%s\n' "$execute_json"
+            exit 1
+          fi
+          if ! printf '%s' "$execute_json" | grep -q 'tutorlms'; then
+            echo "::error::Executing tutorlms/site-info did not return the TutorLMS namespace."
+            printf '%s\n' "$execute_json"
+            exit 1
+          fi
+          echo "TutorLMS ability executed through MCP."
 
           curl -4 --fail --silent --show-error \
             -X DELETE "$ENDPOINT" \
