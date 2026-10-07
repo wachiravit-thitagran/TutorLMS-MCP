@@ -4,15 +4,30 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: '19 3 * * 2'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  playwright:
-    name: WordPress + Tutor LMS + MCP Adapter
+  integration:
+    name: WordPress + Tutor LMS + MCP Adapter (${{ matrix.channel }})
     runs-on: ubuntu-latest
+    continue-on-error: ${{ matrix.experimental }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - channel: stable
+            tutor_version: '4.1.1'
+            mcp_adapter_url: 'https://github.com/WordPress/mcp-adapter/releases/download/v0.7.0/mcp-adapter.zip'
+            experimental: false
+          - channel: latest
+            tutor_version: ''
+            mcp_adapter_url: 'https://github.com/WordPress/mcp-adapter/releases/latest/download/mcp-adapter.zip'
+            experimental: true
 
     steps:
       - name: Checkout
@@ -24,15 +39,26 @@ jobs:
           node-version: '24'
 
       - name: Install Node dependencies
-        run: npm install
+        run: npm install --ignore-scripts --no-fund
 
       - name: Start WordPress test environment
         run: npx wp-env start
 
       - name: Install Tutor LMS and MCP Adapter
+        shell: bash
+        env:
+          TUTOR_VERSION: ${{ matrix.tutor_version }}
+          MCP_ADAPTER_URL: ${{ matrix.mcp_adapter_url }}
         run: |
-          npx wp-env run cli wp plugin install tutor --activate
-          npx wp-env run cli wp plugin install https://github.com/WordPress/mcp-adapter/releases/latest/download/mcp-adapter.zip --activate
+          set -euo pipefail
+
+          if [ -n "$TUTOR_VERSION" ]; then
+            npx wp-env run cli wp plugin install tutor --version="$TUTOR_VERSION" --activate
+          else
+            npx wp-env run cli wp plugin install tutor --activate
+          fi
+
+          npx wp-env run cli wp plugin install "$MCP_ADAPTER_URL" --activate
           npx wp-env run cli wp plugin activate --all
           npx wp-env run cli wp plugin list
 
@@ -42,180 +68,11 @@ jobs:
           npx wp-env run cli wp plugin is-active mcp-adapter
           npx wp-env run cli wp plugin is-active TutorLMS-MCP
 
-      - name: MCP protocol smoke - initialize, discover, execute
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          BASE_URL="http://localhost:8888"
-          ENDPOINT="${BASE_URL}/?rest_route=/mcp/mcp-adapter-default-server"
-
-          for i in $(seq 1 30); do
-            if curl -4 --fail --silent "${BASE_URL}/?rest_route=/" >/dev/null; then
-              break
-            fi
-            if [ "$i" -eq 30 ]; then
-              echo "::error::WordPress did not become ready."
-              exit 1
-            fi
-            sleep 2
-          done
-
-          PASS_PATH="mcp-e2e-pass.txt"
-
-          npx wp-env run cli wp eval '
-            $user = get_user_by( "login", "admin" );
-            $created = WP_Application_Passwords::create_new_application_password(
-              $user->ID,
-              array( "name" => "TutorLMS MCP E2E" )
-            );
-            if ( is_wp_error( $created ) ) {
-              fwrite( STDERR, $created->get_error_message() );
-              exit( 1 );
-            }
-            file_put_contents( WP_CONTENT_DIR . "/mcp-e2e-pass.txt", $created[0] );
-          '
-
-          APP_PASS="$(curl -4 --fail --silent --show-error "${BASE_URL}/wp-content/${PASS_PATH}")"
-          npx wp-env run cli wp eval 'if ( file_exists( WP_CONTENT_DIR . "/mcp-e2e-pass.txt" ) ) { unlink( WP_CONTENT_DIR . "/mcp-e2e-pass.txt" ); }'
-          if [ -z "$APP_PASS" ]; then
-            echo "::error::Application Password creation returned an empty value."
-            exit 1
-          fi
-          echo "Application Password captured (length: ${#APP_PASS})."
-
-          workdir="$(mktemp -d)"
-          headers="${workdir}/headers.txt"
-          body="${workdir}/body.json"
-
-          # Unauthenticated MCP requests must not be accepted.
-          unauth_status="$(curl -4 -sS -o "${workdir}/unauth.json" -w '%{http_code}' \
-            -X POST "$ENDPOINT" \
-            -H 'Content-Type: application/json' \
-            -d '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"unauth-test","version":"1.0.0"}}}')"
-          if [ "$unauth_status" != "401" ]; then
-            echo "::error::Expected unauthenticated initialize to return HTTP 401, got $unauth_status"
-            cat "${workdir}/unauth.json"
-            exit 1
-          fi
-
-          # Initialize an authenticated MCP session.
-          init_status="$(curl --silent --show-error -D "$headers" -o "$body" -w '%{http_code}' \
-            -X POST "$ENDPOINT" \
-            --user "admin:${APP_PASS}" \
-            -H 'Content-Type: application/json' \
-            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"tutorlms-mcp-e2e","version":"1.0.0"}}}')"
-
-          if [ "$init_status" != "200" ]; then
-            echo "::error::MCP initialize failed with HTTP $init_status"
-            cat "$body"
-            exit 1
-          fi
-
-          grep -q '"jsonrpc"' "$body"
-          grep -q '"result"' "$body"
-
-          SESSION_ID="$(awk 'BEGIN{IGNORECASE=1} /^Mcp-Session-Id:/ {gsub("\\r","",$2); print $2}' "$headers" | tail -n1)"
-          if [ -z "$SESSION_ID" ]; then
-            echo "::error::MCP initialize response did not include Mcp-Session-Id."
-            echo "--- response headers ---"
-            sed -E 's/(Authorization:).*/\1 [redacted]/I' "$headers"
-            echo "--- response body ---"
-            cat "$body"
-            exit 1
-          fi
-          echo "MCP session initialized."
-
-          # A non-initialize request without the session header must fail.
-          missing_session_status="$(curl -4 -sS -o "${workdir}/missing-session.json" -w '%{http_code}' \
-            -X POST "$ENDPOINT" \
-            --user "admin:${APP_PASS}" \
-            -H 'Content-Type: application/json' \
-            -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}')"
-          if [ "$missing_session_status" != "400" ]; then
-            echo "::error::Expected tools/list without Mcp-Session-Id to return HTTP 400, got $missing_session_status"
-            cat "${workdir}/missing-session.json"
-            exit 1
-          fi
-
-          curl -4 --fail --silent --show-error \
-            -X POST "$ENDPOINT" \
-            --user "admin:${APP_PASS}" \
-            -H 'Content-Type: application/json' \
-            -H "Mcp-Session-Id: $SESSION_ID" \
-            -H 'MCP-Protocol-Version: 2025-11-25' \
-            -d '{"jsonrpc":"2.0","method":"notifications/initialized"}' >/dev/null
-
-          # The default MCP server must expose the adapter meta-tools.
-          tools_json="$(curl -4 --fail --silent --show-error \
-            -X POST "$ENDPOINT" \
-            --user "admin:${APP_PASS}" \
-            -H 'Content-Type: application/json' \
-            -H "Mcp-Session-Id: $SESSION_ID" \
-            -H 'MCP-Protocol-Version: 2025-11-25' \
-            -d '{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}')"
-
-          for tool in             'mcp-adapter-discover-abilities'             'mcp-adapter-get-ability-info'             'mcp-adapter-execute-ability'; do
-            if ! printf '%s' "$tools_json" | grep -q "$tool"; then
-              echo "::error::tools/list did not expose expected tool: $tool"
-              printf '%s\n' "$tools_json"
-              exit 1
-            fi
-          done
-          echo "MCP meta-tools discovered."
-
-          # TutorLMS MCP abilities must be discoverable through the real adapter.
-          discover_json="$(curl -4 --fail --silent --show-error \
-            -X POST "$ENDPOINT" \
-            --user "admin:${APP_PASS}" \
-            -H 'Content-Type: application/json' \
-            -H "Mcp-Session-Id: $SESSION_ID" \
-            -H 'MCP-Protocol-Version: 2025-11-25' \
-            -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"mcp-adapter-discover-abilities","arguments":{}}}')"
-
-          # JSON may escape forward slashes as \/; normalize before matching names.
-          discover_normalized="$(printf '%s' "$discover_json" | sed 's#\\/#/#g')"
-
-          for ability in \
-            'tutorlms/site-info' \
-            'tutorlms/list-courses' \
-            'tutorlms/get-course' \
-            'tutorlms/get-course-structure' \
-            'tutorlms/get-student-progress'; do
-            if ! printf '%s' "$discover_normalized" | grep -q "$ability"; then
-              echo "::error::MCP discovery did not expose expected ability: $ability"
-              printf '%s\n' "$discover_json"
-              exit 1
-            fi
-          done
-          echo "TutorLMS abilities discovered through MCP."
-
-          # Execute a TutorLMS ability through MCP, not by calling PHP directly.
-          execute_json="$(curl -4 --fail --silent --show-error \
-            -X POST "$ENDPOINT" \
-            --user "admin:${APP_PASS}" \
-            -H 'Content-Type: application/json' \
-            -H "Mcp-Session-Id: $SESSION_ID" \
-            -H 'MCP-Protocol-Version: 2025-11-25' \
-            -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"mcp-adapter-execute-ability","arguments":{"ability_name":"tutorlms/site-info","parameters":{}}}}')"
-
-          if ! printf '%s' "$execute_json" | grep -q 'wordpress_version'; then
-            echo "::error::Executing tutorlms/site-info did not return wordpress_version."
-            printf '%s\n' "$execute_json"
-            exit 1
-          fi
-          if ! printf '%s' "$execute_json" | grep -q 'tutorlms'; then
-            echo "::error::Executing tutorlms/site-info did not return the TutorLMS namespace."
-            printf '%s\n' "$execute_json"
-            exit 1
-          fi
-          echo "TutorLMS ability executed through MCP."
-
-          curl -4 --fail --silent --show-error \
-            -X DELETE "$ENDPOINT" \
-            --user "admin:${APP_PASS}" \
-            -H "Mcp-Session-Id: $SESSION_ID" \
-            -H 'MCP-Protocol-Version: 2025-11-25' >/dev/null
+      - name: MCP protocol, data, and security E2E
+        env:
+          WP_BASE_URL: http://localhost:8888
+          MCP_PROTOCOL_VERSION: '2025-11-25'
+        run: bash tests/e2e/mcp-protocol.sh
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium
@@ -227,7 +84,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.channel }}
           path: playwright-report/
           if-no-files-found: ignore
 
