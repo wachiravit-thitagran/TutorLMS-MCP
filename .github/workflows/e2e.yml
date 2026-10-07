@@ -21,12 +21,12 @@ jobs:
       matrix:
         include:
           - channel: stable
-            wordpress_core: ''
+            wordpress_channel: stable
             tutor_version: '4.1.1'
             mcp_adapter_url: 'https://github.com/WordPress/mcp-adapter/releases/download/v0.7.0/mcp-adapter.zip'
             experimental: false
           - channel: upstream-latest
-            wordpress_core: 'WordPress/WordPress#trunk'
+            wordpress_channel: nightly
             tutor_version: ''
             mcp_adapter_url: 'https://github.com/WordPress/mcp-adapter/releases/latest/download/mcp-adapter.zip'
             experimental: true
@@ -43,41 +43,19 @@ jobs:
       - name: Install Node dependencies
         run: npm install --ignore-scripts --no-fund
 
-      - name: Start WordPress test environment
-        shell: bash
+      - name: Bootstrap WordPress integration stack
         env:
-          WORDPRESS_CORE: ${{ matrix.wordpress_core }}
-        run: |
-          set -euo pipefail
-          if [ -n "$WORDPRESS_CORE" ]; then
-            WP_ENV_CORE="$WORDPRESS_CORE" npx wp-env start
-          else
-            npx wp-env start
-          fi
-
-      - name: Install Tutor LMS and MCP Adapter
-        shell: bash
-        env:
+          WORDPRESS_CHANNEL: ${{ matrix.wordpress_channel }}
           TUTOR_VERSION: ${{ matrix.tutor_version }}
           MCP_ADAPTER_URL: ${{ matrix.mcp_adapter_url }}
-        run: |
-          set -euo pipefail
-
-          if [ -n "$TUTOR_VERSION" ]; then
-            npx wp-env run cli wp plugin install tutor --version="$TUTOR_VERSION" --activate
-          else
-            npx wp-env run cli wp plugin install tutor --activate
-          fi
-
-          npx wp-env run cli wp plugin install "$MCP_ADAPTER_URL" --activate
-          npx wp-env run cli wp plugin activate --all
-          npx wp-env run cli wp plugin list
+          ACTIVATE_PLUGIN_SLUG: TutorLMS-MCP
+        run: bash tests/e2e/bootstrap-wordpress.sh
 
       - name: Verify required plugins
         run: |
-          npx wp-env run cli wp plugin is-active tutor
-          npx wp-env run cli wp plugin is-active mcp-adapter
-          npx wp-env run cli wp plugin is-active TutorLMS-MCP
+          bash tests/e2e/wp-cli.sh plugin is-active tutor
+          bash tests/e2e/wp-cli.sh plugin is-active mcp-adapter
+          bash tests/e2e/wp-cli.sh plugin is-active TutorLMS-MCP
 
       - name: MCP protocol, data, and security E2E
         env:
@@ -101,4 +79,4 @@ jobs:
 
       - name: Stop WordPress environment
         if: always()
-        run: npx wp-env stop
+        run: docker compose -f tests/e2e/docker-compose.yml down -v --remove-orphans
