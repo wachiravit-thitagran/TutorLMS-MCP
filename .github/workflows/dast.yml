@@ -21,32 +21,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: '24'
-
-      - name: Install Node dependencies
-        run: npm install
-
-      - name: Start WordPress test environment
-        run: npx wp-env start
-
-      - name: Install Tutor LMS and MCP Adapter
-        run: |
-          npx wp-env run cli wp plugin install tutor --activate
-          npx wp-env run cli wp plugin install https://github.com/WordPress/mcp-adapter/releases/latest/download/mcp-adapter.zip --activate
-          npx wp-env run cli wp plugin activate --all
-
-      - name: Wait for WordPress
-        run: |
-          for i in $(seq 1 30); do
-            if curl --fail --silent 'http://127.0.0.1:8888/?rest_route=/' >/dev/null; then
-              exit 0
-            fi
-            sleep 2
-          done
-          exit 1
+      - name: Bootstrap WordPress integration stack
+        env:
+          WORDPRESS_CHANNEL: stable
+          TUTOR_VERSION: '4.1.1'
+          MCP_ADAPTER_URL: 'https://github.com/WordPress/mcp-adapter/releases/download/v0.7.0/mcp-adapter.zip'
+          ACTIVATE_PLUGIN_SLUG: TutorLMS-MCP
+        run: bash tests/e2e/bootstrap-wordpress.sh
 
       - name: Resolve Docker host address
         run: |
@@ -58,8 +39,6 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           target: ${{ env.ZAP_TARGET }}
-          # Keep real ZAP failures blocking the build, but do not fail solely on
-          # baseline WARN findings from the stock WordPress development stack.
           cmd_options: '-I'
           fail_action: true
           allow_issue_writing: true
@@ -67,4 +46,4 @@ jobs:
 
       - name: Stop WordPress environment
         if: always()
-        run: npx wp-env stop
+        run: docker compose -f tests/e2e/docker-compose.yml down -v --remove-orphans
