@@ -163,7 +163,7 @@ final class Plugin {
 		$status   = isset( $input['status'] ) ? sanitize_key( $input['status'] ) : 'publish';
 		$search   = isset( $input['search'] ) ? sanitize_text_field( $input['search'] ) : '';
 
-		if ( 'any' === $status && ! current_user_can( 'edit_posts' ) ) {
+		if ( 'publish' !== $status && ! current_user_can( 'edit_posts' ) ) {
 			$status = 'publish';
 		}
 
@@ -279,6 +279,10 @@ final class Plugin {
 
 		if ( ! $course || 'courses' !== $course->post_type ) {
 			return new \WP_Error( 'tutorlms_mcp_course_not_found', 'Tutor LMS course not found.' );
+		}
+
+		if ( 'publish' !== $course->post_status && ! current_user_can( 'edit_post', $course_id ) ) {
+			return new \WP_Error( 'tutorlms_mcp_forbidden', 'You do not have permission to read this course structure.' );
 		}
 
 		$topics = get_posts(
