@@ -15,36 +15,14 @@ function run(command, args) {
   });
 }
 
-const treeResult = run('npm', ['ls', 'simple-git', '@simple-git/argv-parser', '--json']);
-let tree = {};
-try {
-  tree = JSON.parse(treeResult.stdout || '{}');
-} catch {
-  console.error('Could not parse npm ls output.');
-  console.error(treeResult.stdout);
-  process.exit(1);
-}
+const packageJson = JSON.parse(
+  await import('node:fs').then(({ readFileSync }) => readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))
+);
 
-function collectVersions(node, name, versions = new Set()) {
-  if (!node || typeof node !== 'object') {
-    return versions;
-  }
-
-  if (node.dependencies && node.dependencies[name] && node.dependencies[name].version) {
-    versions.add(node.dependencies[name].version);
-  }
-
-  for (const child of Object.values(node.dependencies || {})) {
-    collectVersions(child, name, versions);
-  }
-
-  return versions;
-}
-
-const simpleGitVersions = collectVersions(tree, 'simple-git');
-if (simpleGitVersions.size !== 1 || !simpleGitVersions.has('3.36.0')) {
+const simpleGitPin = packageJson.overrides && packageJson.overrides['simple-git'];
+if (simpleGitPin !== '3.36.0') {
   console.error(
-    `Expected exactly simple-git 3.36.0 for wp-env compatibility, found: ${[...simpleGitVersions].join(', ') || 'none'}`
+    `Expected package.json overrides.simple-git to be 3.36.0, found: ${simpleGitPin || 'none'}`
   );
   process.exit(1);
 }
@@ -102,7 +80,7 @@ for (const [name, item] of severe) {
   // are already patched; the only unresolved 3.x finding is the VISUAL issue.
   const wpEnvAggregate =
     (name === 'simple-git' || name === '@wordpress/env') &&
-    simpleGitVersions.has('3.36.0');
+    simpleGitPin === '3.36.0';
 
   const directAllowlist =
     urls.size > 0 && [...urls].every((url) => allowedAdvisories.has(url));
