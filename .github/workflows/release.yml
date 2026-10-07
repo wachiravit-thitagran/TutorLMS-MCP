@@ -153,6 +153,49 @@ jobs:
           unzip -Z1 "dist/tutorlms-mcp-${VERSION}.zip" | grep -qx 'tutorlms-mcp/tutorlms-mcp.php'
           unzip -Z1 "dist/tutorlms-mcp-${VERSION}.zip" | grep -qx 'tutorlms-mcp/includes/class-tutorlms-mcp.php'
 
+      - name: Setup Node.js for packaged-plugin validation
+        if: steps.changes.outputs.proceed == 'true'
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
+      - name: Install validation tooling
+        if: steps.changes.outputs.proceed == 'true'
+        run: npm install --ignore-scripts --no-fund
+
+      - name: Start clean WordPress validation environment
+        if: steps.changes.outputs.proceed == 'true'
+        run: npx wp-env start
+
+      - name: Install packaged plugin and runtime dependencies
+        if: steps.changes.outputs.proceed == 'true'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          npx wp-env run cli wp plugin install tutor --version=4.1.1 --activate
+          npx wp-env run cli wp plugin install https://github.com/WordPress/mcp-adapter/releases/download/v0.7.0/mcp-adapter.zip --activate
+
+          # wp-env mounts the repository itself; disable that source checkout so
+          # validation executes only the plugin artifact that users will install.
+          npx wp-env run cli wp plugin deactivate TutorLMS-MCP || true
+
+          npx wp-env run cli wp plugin install "$GITHUB_WORKSPACE/dist/tutorlms-mcp-${VERSION}.zip" --activate --force
+          npx wp-env run cli wp plugin is-active tutorlms-mcp
+
+      - name: Validate packaged plugin through MCP
+        if: steps.changes.outputs.proceed == 'true'
+        env:
+          WP_BASE_URL: http://localhost:8888
+          MCP_PROTOCOL_VERSION: '2025-11-25'
+        run: bash tests/e2e/mcp-protocol.sh
+
+      - name: Stop packaged-plugin validation environment
+        if: always() && steps.changes.outputs.proceed == 'true'
+        run: npx wp-env stop
+
       - name: Upload build artifacts
         if: steps.changes.outputs.proceed == 'true'
         uses: actions/upload-artifact@v4
