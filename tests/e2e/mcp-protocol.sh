@@ -139,9 +139,9 @@ bad_protocol="$(curl -4 --silent --show-error   -X POST "$ENDPOINT"   --user "${
 # MCP initialize may reject an unsupported revision or negotiate to one the
 # server supports. It must never claim that the bogus requested revision was
 # successfully negotiated.
-if ! printf '%s' "$bad_protocol" | grep -q '"error"'; then
-  negotiated="$(printf '%s' "$bad_protocol" | jq -er '.result.protocolVersion')"
-  [ "$negotiated" != "1900-01-01" ] || fail "Server accepted an unsupported MCP protocol revision."
+if printf '%s' "$bad_protocol" | grep -Eq '"protocolVersion"[[:space:]]*:[[:space:]]*"1900-01-01"'; then
+  printf '%s\n' "$bad_protocol" >&2
+  fail "Server accepted an unsupported MCP protocol revision."
 fi
 
 ADMIN_SESSION="$(init_session "$ADMIN_LOGIN" "$ADMIN_PASS" admin)"
