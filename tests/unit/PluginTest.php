@@ -253,6 +253,17 @@ final class PluginTest extends TestCase {
 		$this->assertSame( 'any', $GLOBALS['tutorlms_mcp_last_query_args']['post_status'] );
 	}
 
+	public function test_list_courses_forces_publish_when_non_editor_requests_draft(): void {
+		$this->stub_course_output_functions();
+		Functions\when( 'sanitize_key' )->returnArg();
+		Functions\when( 'sanitize_text_field' )->returnArg();
+		Functions\when( 'current_user_can' )->justReturn( false );
+
+		Plugin::instance()->list_courses( array( 'status' => 'draft' ) );
+
+		$this->assertSame( 'publish', $GLOBALS['tutorlms_mcp_last_query_args']['post_status'] );
+	}
+
 	public function test_get_course_rejects_missing_or_wrong_post_type(): void {
 		Functions\when( 'get_post' )->justReturn(
 			new WP_Post(
@@ -325,6 +336,24 @@ final class PluginTest extends TestCase {
 
 		$this->assertInstanceOf( WP_Error::class, $result );
 		$this->assertSame( 'tutorlms_mcp_course_not_found', $result->get_error_code() );
+	}
+
+	public function test_get_course_structure_blocks_unpublished_course_without_edit_permission(): void {
+		Functions\when( 'get_post' )->justReturn(
+			new WP_Post(
+				array(
+					'ID'          => 19,
+					'post_type'   => 'courses',
+					'post_status' => 'draft',
+				)
+			)
+		);
+		Functions\when( 'current_user_can' )->justReturn( false );
+
+		$result = Plugin::instance()->get_course_structure( array( 'course_id' => 19 ) );
+
+		$this->assertInstanceOf( WP_Error::class, $result );
+		$this->assertSame( 'tutorlms_mcp_forbidden', $result->get_error_code() );
 	}
 
 	public function test_get_course_structure_returns_ordered_topics_and_children(): void {
