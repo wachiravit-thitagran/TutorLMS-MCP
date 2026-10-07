@@ -4,10 +4,11 @@
   "scripts": {
     "wp-env:start": "wp-env start",
     "wp-env:stop": "wp-env stop",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "audit": "npm audit --audit-level=high"
   },
   "devDependencies": {
-    "@playwright/test": "^1.51.0",
-    "@wordpress/env": "^10.18.0"
+    "@playwright/test": "^1.63.0",
+    "@wordpress/env": "^11.16.0"
   }
 }
