@@ -8,7 +8,7 @@ WORKDIR="$(mktemp -d)"
 FIXTURE_PATH="mcp-e2e-fixture.json"
 
 cleanup() {
-  npx wp-env run cli wp eval '
+  bash tests/e2e/wp-cli.sh eval '
     foreach ( array( "admin", "mcp_student_a", "mcp_student_b" ) as $login ) {
       $user = get_user_by( "login", $login );
       if ( $user && class_exists( "WP_Application_Passwords" ) ) {
@@ -105,7 +105,7 @@ expect_error_response() {
 
 wait_for_wordpress
 
-npx wp-env run cli wp eval-file tests/e2e/setup-fixture.php >/dev/null
+bash tests/e2e/wp-cli.sh eval-file /mcp-tests/setup-fixture.php >/dev/null
 
 fixture="$(curl -4 --fail --silent --show-error "${BASE_URL}/wp-content/${FIXTURE_PATH}")"
 [ -n "$fixture" ] || fail "Fixture JSON was empty."
