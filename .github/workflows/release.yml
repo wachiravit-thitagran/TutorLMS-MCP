@@ -153,48 +153,45 @@ jobs:
           unzip -Z1 "dist/tutorlms-mcp-${VERSION}.zip" | grep -qx 'tutorlms-mcp/tutorlms-mcp.php'
           unzip -Z1 "dist/tutorlms-mcp-${VERSION}.zip" | grep -qx 'tutorlms-mcp/includes/class-tutorlms-mcp.php'
 
-      - name: Setup Node.js for packaged-plugin validation
+      - name: Prepare packaged-plugin validation mount
         if: steps.changes.outputs.proceed == 'true'
-        uses: actions/setup-node@v7
-        with:
-          node-version: '24'
+        run: mkdir -p "$RUNNER_TEMP/tutorlms-mcp-empty-plugin"
 
-      - name: Install validation tooling
-        if: steps.changes.outputs.proceed == 'true'
-        run: npm install --ignore-scripts --no-fund
-
-      - name: Start clean WordPress validation environment
-        if: steps.changes.outputs.proceed == 'true'
-        run: npx wp-env start
-
-      - name: Install packaged plugin and runtime dependencies
+      - name: Bootstrap clean WordPress validation environment
         if: steps.changes.outputs.proceed == 'true'
         env:
+          PLUGIN_SOURCE: ${{ runner.temp }}/tutorlms-mcp-empty-plugin
+          WORDPRESS_CHANNEL: stable
+          TUTOR_VERSION: '4.1.1'
+          MCP_ADAPTER_URL: 'https://github.com/WordPress/mcp-adapter/releases/download/v0.7.0/mcp-adapter.zip'
+          ACTIVATE_PLUGIN_SLUG: ''
+        run: bash tests/e2e/bootstrap-wordpress.sh
+
+      - name: Install packaged plugin ZIP
+        if: steps.changes.outputs.proceed == 'true'
+        env:
+          PLUGIN_SOURCE: ${{ runner.temp }}/tutorlms-mcp-empty-plugin
           VERSION: ${{ steps.version.outputs.version }}
         shell: bash
         run: |
           set -euo pipefail
-
-          npx wp-env run cli wp plugin install tutor --version=4.1.1 --activate
-          npx wp-env run cli wp plugin install https://github.com/WordPress/mcp-adapter/releases/download/v0.7.0/mcp-adapter.zip --activate
-
-          # wp-env mounts the repository itself; disable that source checkout so
-          # validation executes only the plugin artifact that users will install.
-          npx wp-env run cli wp plugin deactivate TutorLMS-MCP || true
-
-          npx wp-env run cli wp plugin install "$GITHUB_WORKSPACE/dist/tutorlms-mcp-${VERSION}.zip" --activate --force
-          npx wp-env run cli wp plugin is-active tutorlms-mcp
+          bash tests/e2e/wp-cli.sh plugin install "/workspace/dist/tutorlms-mcp-${VERSION}.zip" --activate --force
+          bash tests/e2e/wp-cli.sh plugin is-active tutorlms-mcp
+          bash tests/e2e/wp-cli.sh plugin get tutorlms-mcp --field=version | grep -qx "${VERSION}"
 
       - name: Validate packaged plugin through MCP
         if: steps.changes.outputs.proceed == 'true'
         env:
+          PLUGIN_SOURCE: ${{ runner.temp }}/tutorlms-mcp-empty-plugin
           WP_BASE_URL: http://localhost:8888
           MCP_PROTOCOL_VERSION: '2025-11-25'
         run: bash tests/e2e/mcp-protocol.sh
 
       - name: Stop packaged-plugin validation environment
         if: always() && steps.changes.outputs.proceed == 'true'
-        run: npx wp-env stop
+        env:
+          PLUGIN_SOURCE: ${{ runner.temp }}/tutorlms-mcp-empty-plugin
+        run: docker compose -f tests/e2e/docker-compose.yml down -v --remove-orphans
 
       - name: Upload build artifacts
         if: steps.changes.outputs.proceed == 'true'
