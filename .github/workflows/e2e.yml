@@ -64,7 +64,20 @@ jobs:
             sleep 2
           done
 
-          APP_PASS="$(npx wp-env run cli wp user application-password create admin "TutorLMS MCP E2E" --porcelain | tail -n1 | tr -d '\r')"
+          APP_PASS="$(
+            npx wp-env run cli wp eval '
+              $user = get_user_by( "login", "admin" );
+              $created = WP_Application_Passwords::create_new_application_password(
+                $user->ID,
+                array( "name" => "TutorLMS MCP E2E" )
+              );
+              if ( is_wp_error( $created ) ) {
+                fwrite( STDERR, $created->get_error_message() );
+                exit( 1 );
+              }
+              echo "MCP_APP_PASS=" . $created[0] . PHP_EOL;
+            ' | sed -n 's/^MCP_APP_PASS=//p' | tail -n1 | tr -d '\r'
+          )"
           test -n "$APP_PASS"
 
           workdir="$(mktemp -d)"
@@ -79,11 +92,17 @@ jobs:
           test "$unauth_status" = "401"
 
           # Initialize an authenticated MCP session.
-          curl --fail --silent --show-error -D "$headers" -o "$body" \
+          init_status="$(curl --silent --show-error -D "$headers" -o "$body" -w '%{http_code}' \
             -X POST "$ENDPOINT" \
             --user "admin:${APP_PASS}" \
             -H 'Content-Type: application/json' \
-            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"tutorlms-mcp-e2e","version":"1.0.0"}}}'
+            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"tutorlms-mcp-e2e","version":"1.0.0"}}}')"
+
+          if [ "$init_status" != "200" ]; then
+            echo "::error::MCP initialize failed with HTTP $init_status"
+            cat "$body"
+            exit 1
+          fi
 
           grep -q '"jsonrpc"' "$body"
           grep -q '"result"' "$body"
@@ -104,6 +123,7 @@ jobs:
             --user "admin:${APP_PASS}" \
             -H 'Content-Type: application/json' \
             -H "Mcp-Session-Id: $SESSION_ID" \
+            -H 'MCP-Protocol-Version: 2025-11-25' \
             -d '{"jsonrpc":"2.0","method":"notifications/initialized"}' >/dev/null
 
           # The default MCP server must expose the adapter meta-tools.
@@ -112,6 +132,7 @@ jobs:
             --user "admin:${APP_PASS}" \
             -H 'Content-Type: application/json' \
             -H "Mcp-Session-Id: $SESSION_ID" \
+            -H 'MCP-Protocol-Version: 2025-11-25' \
             -d '{"jsonrpc":"2.0","id":3,"method":"tools/list","params":{}}')"
 
           printf '%s' "$tools_json" | grep -q 'mcp-adapter-discover-abilities'
@@ -124,6 +145,7 @@ jobs:
             --user "admin:${APP_PASS}" \
             -H 'Content-Type: application/json' \
             -H "Mcp-Session-Id: $SESSION_ID" \
+            -H 'MCP-Protocol-Version: 2025-11-25' \
             -d '{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"mcp-adapter-discover-abilities","arguments":{}}}')"
 
           for ability in \
@@ -141,6 +163,7 @@ jobs:
             --user "admin:${APP_PASS}" \
             -H 'Content-Type: application/json' \
             -H "Mcp-Session-Id: $SESSION_ID" \
+            -H 'MCP-Protocol-Version: 2025-11-25' \
             -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"mcp-adapter-execute-ability","arguments":{"ability_name":"tutorlms/site-info","parameters":{}}}}')"
 
           printf '%s' "$execute_json" | grep -q 'wordpress_version'
@@ -149,7 +172,8 @@ jobs:
           curl --fail --silent --show-error \
             -X DELETE "$ENDPOINT" \
             --user "admin:${APP_PASS}" \
-            -H "Mcp-Session-Id: $SESSION_ID" >/dev/null
+            -H "Mcp-Session-Id: $SESSION_ID" \
+            -H 'MCP-Protocol-Version: 2025-11-25' >/dev/null
 
       - name: Run Playwright E2E
         run: npm run e2e
