@@ -186,7 +186,8 @@ list_json="$(call_ability "$ADMIN_LOGIN" "$ADMIN_PASS" "$ADMIN_SESSION" 10 tutor
 printf '%s' "$list_json" | grep -q 'MCP E2E Published Course' || fail "Published fixture course missing from list-courses."
 
 # 10. Data-driven get-course.
-course_json="$(call_ability "$ADMIN_LOGIN" "$ADMIN_PASS" "$ADMIN_SESSION" 11 tutorlms/get-course "{"course_id":$COURSE_ID}")"
+course_params="$(jq -cn --argjson course_id "$COURSE_ID" '{course_id:$course_id}')"
+course_json="$(call_ability "$ADMIN_LOGIN" "$ADMIN_PASS" "$ADMIN_SESSION" 11 tutorlms/get-course "$course_params")"
 if ! printf '%s' "$course_json" | grep -q 'MCP E2E Published Course'; then
   printf '%s\n' "$course_json" >&2
   fail "get-course did not return fixture course."
@@ -197,17 +198,20 @@ if ! printf '%s' "$course_json" | grep -q 'MCP E2E course content'; then
 fi
 
 # 11. Data-driven course structure.
-structure_json="$(call_ability "$ADMIN_LOGIN" "$ADMIN_PASS" "$ADMIN_SESSION" 12 tutorlms/get-course-structure "{"course_id":$COURSE_ID}")"
+structure_params="$(jq -cn --argjson course_id "$COURSE_ID" '{course_id:$course_id}')"
+structure_json="$(call_ability "$ADMIN_LOGIN" "$ADMIN_PASS" "$ADMIN_SESSION" 12 tutorlms/get-course-structure "$structure_params")"
 printf '%s' "$structure_json" | grep -q 'MCP E2E Topic' || fail "Course structure missing fixture topic."
 printf '%s' "$structure_json" | grep -q 'MCP E2E Lesson' || fail "Course structure missing fixture lesson."
 
 # 12. Student can read own Tutor progress.
-progress_json="$(call_ability "$STUDENT_A_LOGIN" "$STUDENT_A_PASS" "$STUDENT_SESSION" 13 tutorlms/get-student-progress "{"course_id":$COURSE_ID,"user_id":$STUDENT_A_ID}")"
+progress_params="$(jq -cn --argjson course_id "$COURSE_ID" --argjson user_id "$STUDENT_A_ID" '{course_id:$course_id,user_id:$user_id}')"
+progress_json="$(call_ability "$STUDENT_A_LOGIN" "$STUDENT_A_PASS" "$STUDENT_SESSION" 13 tutorlms/get-student-progress "$progress_params")"
 printf '%s' "$progress_json" | grep -q '"available"' || fail "Student progress response did not include availability."
 printf '%s' "$progress_json" | grep -q "$COURSE_ID" || fail "Student progress response did not reference fixture course."
 
 # 13. Cross-user progress is forbidden.
-cross_user_json="$(call_ability "$STUDENT_A_LOGIN" "$STUDENT_A_PASS" "$STUDENT_SESSION" 14 tutorlms/get-student-progress "{"course_id":$COURSE_ID,"user_id":$STUDENT_B_ID}")"
+cross_user_params="$(jq -cn --argjson course_id "$COURSE_ID" --argjson user_id "$STUDENT_B_ID" '{course_id:$course_id,user_id:$user_id}')"
+cross_user_json="$(call_ability "$STUDENT_A_LOGIN" "$STUDENT_A_PASS" "$STUDENT_SESSION" 14 tutorlms/get-student-progress "$cross_user_params")"
 expect_error_response "$cross_user_json" "Cross-user student progress"
 
 # 14. Invalid ability arguments must be schema-rejected.
@@ -222,9 +226,11 @@ if printf '%s' "$student_draft_list" | grep -q 'MCP E2E Draft Course'; then
 fi
 
 # 16. Learner cannot read unpublished course or its curriculum.
-student_draft_course="$(call_ability "$STUDENT_A_LOGIN" "$STUDENT_A_PASS" "$STUDENT_SESSION" 17 tutorlms/get-course "{"course_id":$DRAFT_COURSE_ID}")"
+student_draft_course_params="$(jq -cn --argjson course_id "$DRAFT_COURSE_ID" '{course_id:$course_id}')"
+student_draft_course="$(call_ability "$STUDENT_A_LOGIN" "$STUDENT_A_PASS" "$STUDENT_SESSION" 17 tutorlms/get-course "$student_draft_course_params")"
 expect_error_response "$student_draft_course" "Draft course access"
-student_draft_structure="$(call_ability "$STUDENT_A_LOGIN" "$STUDENT_A_PASS" "$STUDENT_SESSION" 18 tutorlms/get-course-structure "{"course_id":$DRAFT_COURSE_ID}")"
+student_draft_structure_params="$(jq -cn --argjson course_id "$DRAFT_COURSE_ID" '{course_id:$course_id}')"
+student_draft_structure="$(call_ability "$STUDENT_A_LOGIN" "$STUDENT_A_PASS" "$STUDENT_SESSION" 18 tutorlms/get-course-structure "$student_draft_structure_params")"
 expect_error_response "$student_draft_structure" "Draft course structure access"
 
 # 17. Session DELETE invalidates the session.
