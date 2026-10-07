@@ -28,7 +28,31 @@ jobs:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
+      - name: Check for releasable changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          latest_tag="$(git tag --list 'v[0-9]*' --sort=-v:refname | head -n1 || true)"
+          if [ -z "$latest_tag" ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed="$(git diff --name-only "$latest_tag"..HEAD --             .             ':(exclude).github/**'             ':(exclude)tests/**'             ':(exclude)docs/**'             ':(exclude)**/*.md')"
+
+          if [ -n "$changed" ]; then
+            echo "Releasable changes since $latest_tag:"
+            printf '%s\n' "$changed"
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Only tests/docs/workflows changed since $latest_tag; no release needed."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Wait for companion workflows
+        if: steps.changes.outputs.proceed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -64,6 +88,7 @@ jobs:
           done
 
       - name: Resolve release version
+        if: steps.changes.outputs.proceed == 'true'
         id: version
         shell: bash
         run: |
@@ -89,6 +114,7 @@ jobs:
           echo "tag=v$next" >> "$GITHUB_OUTPUT"
 
       - name: Stamp release version
+        if: steps.changes.outputs.proceed == 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         shell: bash
@@ -100,6 +126,7 @@ jobs:
           php -l includes/class-tutorlms-mcp.php
 
       - name: Build installable plugin ZIP
+        if: steps.changes.outputs.proceed == 'true'
         env:
           VERSION: ${{ steps.version.outputs.version }}
         shell: bash
@@ -124,6 +151,7 @@ jobs:
           unzip -Z1 "dist/tutorlms-mcp-${VERSION}.zip" | grep -qx 'tutorlms-mcp/includes/class-tutorlms-mcp.php'
 
       - name: Upload build artifacts
+        if: steps.changes.outputs.proceed == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: tutorlms-mcp-${{ steps.version.outputs.version }}
@@ -133,6 +161,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub Release
+        if: steps.changes.outputs.proceed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.version.outputs.tag }}
