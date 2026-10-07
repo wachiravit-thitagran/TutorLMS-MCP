@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 
 test('WordPress responds and TutorLMS MCP plugin is active', async ({ request }) => {
-  const response = await request.get('/wp-json/');
+  const response = await request.get('/?rest_route=/');
   expect(response.ok()).toBeTruthy();
 
   const body = await response.json();
