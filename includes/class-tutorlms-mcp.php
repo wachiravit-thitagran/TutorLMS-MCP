@@ -214,7 +214,7 @@ final class Plugin {
 							'minimum' => 1,
 						),
 					),
-					'required' => array( 'course_id' ),
+					'required'   => array( 'course_id' ),
 				),
 				'execute_callback'    => array( $this, 'get_course' ),
 				'permission_callback' => array( $this, 'can_read_ability' ),
@@ -264,7 +264,7 @@ final class Plugin {
 							'minimum' => 1,
 						),
 					),
-					'required' => array( 'course_id' ),
+					'required'   => array( 'course_id' ),
 				),
 				'execute_callback'    => array( $this, 'get_course_structure' ),
 				'permission_callback' => array( $this, 'can_read_ability' ),
@@ -339,7 +339,7 @@ final class Plugin {
 			'tutorlms/get-student-progress',
 			array(
 				'label'       => 'Get Tutor LMS Student Progress',
-				'description' => 'Retrieves a learner's completion progress for a Tutor LMS course when progress data is available.',
+				'description' => "Retrieves a learner's completion progress for a Tutor LMS course when progress data is available.",
 				'category'    => 'tutorlms',
 				'input_schema' => array(
 					'type'       => 'object',
@@ -348,12 +348,12 @@ final class Plugin {
 							'type'    => 'integer',
 							'minimum' => 1,
 						),
-						'user_id' => array(
+						'user_id'   => array(
 							'type'    => 'integer',
 							'minimum' => 1,
 						),
 					),
-					'required' => array( 'course_id', 'user_id' ),
+					'required'   => array( 'course_id', 'user_id' ),
 				),
 				'execute_callback'    => array( $this, 'get_student_progress' ),
 				'permission_callback' => array( $this, 'can_read_progress' ),
