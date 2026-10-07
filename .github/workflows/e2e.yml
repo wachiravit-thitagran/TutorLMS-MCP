@@ -76,11 +76,11 @@ jobs:
               fwrite( STDERR, $created->get_error_message() );
               exit( 1 );
             }
-            file_put_contents( ABSPATH . "mcp-e2e-pass.txt", $created[0] );
+            file_put_contents( WP_CONTENT_DIR . "/mcp-e2e-pass.txt", $created[0] );
           '
 
-          APP_PASS="$(curl -4 --fail --silent --show-error "${BASE_URL}/${PASS_PATH}")"
-          npx wp-env run cli wp eval 'if ( file_exists( ABSPATH . "mcp-e2e-pass.txt" ) ) { unlink( ABSPATH . "mcp-e2e-pass.txt" ); }'
+          APP_PASS="$(curl -4 --fail --silent --show-error "${BASE_URL}/wp-content/${PASS_PATH}")"
+          npx wp-env run cli wp eval 'if ( file_exists( WP_CONTENT_DIR . "/mcp-e2e-pass.txt" ) ) { unlink( WP_CONTENT_DIR . "/mcp-e2e-pass.txt" ); }'
           if [ -z "$APP_PASS" ]; then
             echo "::error::Application Password creation returned an empty value."
             exit 1
