@@ -64,20 +64,25 @@ jobs:
             sleep 2
           done
 
-          APP_PASS="$(
-            npx wp-env run cli wp eval '
-              $user = get_user_by( "login", "admin" );
-              $created = WP_Application_Passwords::create_new_application_password(
-                $user->ID,
-                array( "name" => "TutorLMS MCP E2E" )
-              );
-              if ( is_wp_error( $created ) ) {
-                fwrite( STDERR, $created->get_error_message() );
-                exit( 1 );
-              }
-              echo "MCP_APP_PASS=" . $created[0] . PHP_EOL;
-            ' | sed -n 's/^MCP_APP_PASS=//p' | tail -n1 | tr -d '\r'
-          )"
+          PASS_FILE="$GITHUB_WORKSPACE/tests/.mcp-app-pass"
+          rm -f "$PASS_FILE"
+
+          npx wp-env run cli wp eval '
+            $user = get_user_by( "login", "admin" );
+            $created = WP_Application_Passwords::create_new_application_password(
+              $user->ID,
+              array( "name" => "TutorLMS MCP E2E" )
+            );
+            if ( is_wp_error( $created ) ) {
+              fwrite( STDERR, $created->get_error_message() );
+              exit( 1 );
+            }
+            file_put_contents( TUTORLMS_MCP_DIR . "tests/.mcp-app-pass", $created[0] );
+          '
+
+          test -s "$PASS_FILE"
+          APP_PASS="$(cat "$PASS_FILE")"
+          rm -f "$PASS_FILE"
           test -n "$APP_PASS"
 
           workdir="$(mktemp -d)"
