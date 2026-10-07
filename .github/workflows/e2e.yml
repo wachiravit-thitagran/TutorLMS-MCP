@@ -26,9 +26,6 @@ jobs:
       - name: Install Node dependencies
         run: npm install
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
-
       - name: Start WordPress test environment
         run: npx wp-env start
 
@@ -219,6 +216,9 @@ jobs:
             --user "admin:${APP_PASS}" \
             -H "Mcp-Session-Id: $SESSION_ID" \
             -H 'MCP-Protocol-Version: 2025-11-25' >/dev/null
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
 
       - name: Run Playwright E2E
         run: npm run e2e
