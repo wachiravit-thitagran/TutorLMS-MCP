@@ -187,8 +187,14 @@ printf '%s' "$list_json" | grep -q 'MCP E2E Published Course' || fail "Published
 
 # 10. Data-driven get-course.
 course_json="$(call_ability "$ADMIN_LOGIN" "$ADMIN_PASS" "$ADMIN_SESSION" 11 tutorlms/get-course "{"course_id":$COURSE_ID}")"
-printf '%s' "$course_json" | grep -q 'MCP E2E Published Course' || fail "get-course did not return fixture course."
-printf '%s' "$course_json" | grep -q 'MCP E2E course content' || fail "get-course did not return fixture content."
+if ! printf '%s' "$course_json" | grep -q 'MCP E2E Published Course'; then
+  printf '%s\n' "$course_json" >&2
+  fail "get-course did not return fixture course."
+fi
+if ! printf '%s' "$course_json" | grep -q 'MCP E2E course content'; then
+  printf '%s\n' "$course_json" >&2
+  fail "get-course did not return fixture content."
+fi
 
 # 11. Data-driven course structure.
 structure_json="$(call_ability "$ADMIN_LOGIN" "$ADMIN_PASS" "$ADMIN_SESSION" 12 tutorlms/get-course-structure "{"course_id":$COURSE_ID}")"
