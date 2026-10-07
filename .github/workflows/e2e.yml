@@ -43,7 +43,7 @@ jobs:
         run: |
           npx wp-env run cli wp plugin is-active tutor
           npx wp-env run cli wp plugin is-active mcp-adapter
-          npx wp-env run cli wp plugin is-active tutorlms-mcp
+          npx wp-env run cli wp plugin is-active TutorLMS-MCP
 
       - name: MCP protocol smoke - initialize, discover, execute
         shell: bash
