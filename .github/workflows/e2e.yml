@@ -51,10 +51,10 @@ jobs:
           set -euo pipefail
 
           BASE_URL="http://127.0.0.1:8888"
-          ENDPOINT="${BASE_URL}/wp-json/mcp/mcp-adapter-default-server"
+          ENDPOINT="${BASE_URL}/?rest_route=/mcp/mcp-adapter-default-server"
 
           for i in $(seq 1 30); do
-            if curl --fail --silent "${BASE_URL}/wp-json/" >/dev/null; then
+            if curl --fail --silent "${BASE_URL}/?rest_route=/" >/dev/null; then
               break
             fi
             if [ "$i" -eq 30 ]; then
